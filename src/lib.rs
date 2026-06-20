@@ -8,6 +8,7 @@ use crate::instructions::EscrowInstructions;
 
 mod instructions;
 mod state;
+mod error;
 mod tests;
 
 entrypoint!(process_instruction);
@@ -27,6 +28,10 @@ pub fn process_instruction(
 
     match EscrowInstructions::try_from(discriminator)? {
         EscrowInstructions::Make => instructions::process_make_instruction(accounts, data)?,
+
+        EscrowInstructions::Refund => instructions::process_refund_instruction(accounts, data)?,
+
+        EscrowInstructions::Take => instructions::process_take_instruction(accounts, data)?
     }
 
     Ok(())

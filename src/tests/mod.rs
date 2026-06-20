@@ -80,9 +80,9 @@ mod tests {
         setup_make_with_discriminator(0, amount_to_receive, amount_to_give, mint_amount)
     }
 
-    fn setup_make_v2(amount_to_receive: u64, amount_to_give: u64, mint_amount: u64) -> EscrowSetup {
-        setup_make_with_discriminator(3, amount_to_receive, amount_to_give, mint_amount)
-    }
+    // fn setup_make_v2(amount_to_receive: u64, amount_to_give: u64, mint_amount: u64) -> EscrowSetup {
+    //     setup_make_with_discriminator(3, amount_to_receive, amount_to_give, mint_amount)
+    // }
 
     fn setup_make_with_discriminator(
         discriminator: u8,
@@ -181,5 +181,117 @@ mod tests {
         assert_eq!(maker_balance, 1_000_000_000 - s.amount_to_give);
 
         println!("test_make passed");
+    }
+
+    #[test]
+    fn test_refund() {
+        let mut s = setup_make(100_000_000, 500_000_000, 1_000_000_000);
+
+        let refund_data = vec![1, s._escrow_bump];
+
+        let ix = Instruction {
+            program_id: program_id(),
+            accounts: vec![
+                AccountMeta::new(s.maker.pubkey(), true),
+                AccountMeta::new_readonly(s.mint_a, false),
+                AccountMeta::new(s.escrow, false),
+                AccountMeta::new(s.maker_ata_a, false),
+                AccountMeta::new(s.vault, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+                AccountMeta::new_readonly(ata_program(), false),
+            ],
+            data: refund_data,
+        };
+        let msg = Message::new(&[ix], Some(&s.maker.pubkey()));
+        let blockhash = s.svm.latest_blockhash();
+        let tx = Transaction::new(&[&s.maker], msg, blockhash);
+
+        let meta = s
+            .svm
+            .send_transaction(tx)
+            .expect("Refund instruction failed");
+        println!("Refund CU: {}", meta.compute_units_consumed);
+
+        assert!(
+            s.svm.get_account(&s.vault).is_none(),
+            "Vault token account should be closed"
+        )
+    }
+
+    #[test]
+    fn test_take() {
+        let mut s = setup_make(100_000_000, 500_000_000, 1_000_000_000);
+
+        let taker = Keypair::new();
+
+        s.svm
+            .airdrop(&taker.pubkey(), LAMPORTS_PER_SOL)
+            .expect("Taker airdrop failed");
+
+        let maker_ata_b = CreateAssociatedTokenAccount::new(&mut s.svm, &s.maker, &s.mint_b)
+            .owner(&s.maker.pubkey())
+            .send()
+            .unwrap();
+
+        let taker_ata_a = CreateAssociatedTokenAccount::new(&mut s.svm, &s.maker, &s.mint_a)
+            .owner(&taker.pubkey())
+            .send()
+            .unwrap();
+
+        let taker_ata_b = CreateAssociatedTokenAccount::new(&mut s.svm, &s.maker, &s.mint_b)
+            .owner(&taker.pubkey())
+            .send()
+            .unwrap();
+
+        MintTo::new(
+            &mut s.svm,
+            &s.maker,
+            &s.mint_b,
+            &taker_ata_b,
+            s.amount_to_receive,
+        )
+        .send()
+        .unwrap();
+
+        let take_data = vec![2, s._escrow_bump];
+
+        let ix = Instruction {
+            program_id: program_id(),
+            accounts: vec![
+                AccountMeta::new(taker.pubkey(), true),
+                AccountMeta::new(s.maker.pubkey(), false),
+                AccountMeta::new_readonly(s.mint_a, false),
+                AccountMeta::new_readonly(s.mint_b, false),
+                AccountMeta::new(s.escrow, false),
+                AccountMeta::new(maker_ata_b, false),
+                AccountMeta::new(taker_ata_a, false),
+                AccountMeta::new(taker_ata_b, false),
+                AccountMeta::new(s.vault, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+                AccountMeta::new_readonly(ata_program(), false),
+            ],
+            data: take_data,
+        };
+
+        let msg = Message::new(&[ix], Some(&taker.pubkey()));
+        let blockhash = s.svm.latest_blockhash();
+        let tx = Transaction::new(&[&taker], msg, blockhash);
+
+        let meta = s.svm.send_transaction(tx).expect("Take instruction failed");
+        println!("Take CU: {}", meta.compute_units_consumed);
+
+        let maker_b_balance = read_token_balance(&s.svm, &maker_ata_b);
+        assert_eq!(maker_b_balance, s.amount_to_receive);
+
+        let taker_a_balance = read_token_balance(&s.svm, &taker_ata_a);
+        assert_eq!(taker_a_balance, s.amount_to_give);
+
+        let taker_b_balance = read_token_balance(&s.svm, &taker_ata_b);
+        assert_eq!(taker_b_balance, 0);
+
+        assert!(
+            s.svm.get_account(&s.vault).is_none(),
+            "Vault token account should be closed"
+        );
     }
 }

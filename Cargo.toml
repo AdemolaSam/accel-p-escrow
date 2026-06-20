@@ -15,6 +15,7 @@ pinocchio-pubkey = "0.3.0"
 pinocchio-log = "0.5.1"
 pinocchio-associated-token-account = "0.4.0"
 wincode = { version = "0.4.5", default-features = false, features = ["derive"] }
+thiserror = { version = "2.0", default-features = false }
 
 
 [dev-dependencies]
@@ -29,8 +30,8 @@ solana-signer = "3.0.0"
 solana-transaction = "3.0.2"
 solana-message = "3.0.1"
 solana-sdk-ids = "3.1.0"
-spl-token-2022 = { version = "10.0.0", features = ["no-entrypoint"] }
-spl-associated-token-account = "8.0.0"
+spl-token-2022 = { version = "10.0.0", default-features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "8.0.0", default-features = false, features = ["no-entrypoint"] }
 solana-rpc-client = "3.1.9"
 solana-address = "2.2.0"
 solana-account = "4.1.0"

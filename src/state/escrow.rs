@@ -1,4 +1,4 @@
-use pinocchio::{AccountView, Address, error::ProgramError};
+use pinocchio::{AccountView, Address, ProgramResult, error::ProgramError};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -26,17 +26,17 @@ impl Escrow {
         unsafe { &*(&self.maker as *const [u8; 32] as *const Address) }
     }
 
-    pub fn maker_raw(&self) -> &[u8; 32] {
-        &self.maker
-    }
+    // pub fn maker_raw(&self) -> &[u8; 32] {
+    //     &self.maker
+    // }
 
     pub fn set_maker(&mut self, maker: &Address) {
         self.maker.copy_from_slice(maker.as_ref());
     }
 
-    pub fn mint_a(&self) -> &Address {
-        unsafe { &*(&self.mint_a as *const [u8; 32] as *const Address) }
-    }
+    // pub fn mint_a(&self) -> &Address {
+    //     unsafe { &*(&self.mint_a as *const [u8; 32] as *const Address) }
+    // }
 
     pub fn set_mint_a(&mut self, mint_a: &Address) {
         self.mint_a.copy_from_slice(mint_a.as_ref());
@@ -64,5 +64,17 @@ impl Escrow {
 
     pub fn set_amount_to_give(&mut self, amount: u64) {
         self.amount_to_give = amount.to_le_bytes();
+    }
+
+    pub fn close_pda(
+        escrow_account: &mut AccountView,
+        receiver: &mut AccountView,
+    ) -> ProgramResult {
+        let escrow_lamports = escrow_account.lamports();
+
+        receiver.set_lamports(receiver.lamports() + escrow_lamports);
+        escrow_account.set_lamports(0);
+
+        Ok(())
     }
 }
